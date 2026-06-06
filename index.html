@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A simple browser-based serial logger for Arduino and other serial devices using the Web Serial API.">
+  <title>Arduino Serial Logger</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1f2630;
+      --border: #30363d;
+      --border-2: #484f58;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --muted-2: #6e7681;
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --red: #f85149;
+      --yellow: #d29922;
+      --orange: #ffab70;
+      --shadow: rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(88, 166, 255, 0.09), transparent 34rem),
+        radial-gradient(circle at 90% 10%, rgba(63, 185, 80, 0.07), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body.fa {
+      font-family: Tahoma, Arial, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .topbar {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(13, 17, 23, 0.78);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .logo svg {
+      width: 24px;
+      height: 24px;
+      color: var(--green);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lang-btn,
+    .status-pill,
+    .btn,
+    select,
+    input[type="text"] {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 8px;
+      outline: none;
+    }
+
+    .lang-btn {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 11px;
+      cursor: pointer;
+    }
+
+    .status-pill {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status-pill.connected {
+      color: var(--green);
+      border-color: rgba(63, 185, 80, 0.55);
+      background: rgba(63, 185, 80, 0.09);
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--muted-2);
+    }
+
+    .pulse.active {
+      background: var(--green);
+      box-shadow: 0 0 0 7px rgba(63, 185, 80, 0.12);
+    }
+
+    .main {
+      width: min(1180px, calc(100% - 28px));
+      margin: 22px auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chrome-warn,
+    .hint-card {
+      border: 1px solid rgba(210, 153, 34, 0.38);
+      background: rgba(210, 153, 34, 0.08);
+      color: #f2cc60;
+      border-radius: 10px;
+      padding: 11px 13px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .chrome-warn.show,
+    .hint-card.show { display: flex; }
+
+    .chrome-warn svg,
+    .hint-card svg {
+      width: 19px;
+      height: 19px;
+      flex: 0 0 auto;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(210px, 1fr) 150px repeat(4, auto);
+      gap: 8px;
+      align-items: center;
+    }
+
+    select {
+      height: 38px;
+      padding: 0 10px;
+      cursor: pointer;
+    }
+
+    .btn {
+      height: 38px;
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: var(--border-2);
+      background: var(--panel-2);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+    }
+
+    .btn.primary {
+      border-color: rgba(63, 185, 80, 0.58);
+      background: rgba(63, 185, 80, 0.12);
+      color: #79c0ff;
+    }
+
+    .btn.danger {
+      border-color: rgba(248, 81, 73, 0.62);
+      background: rgba(248, 81, 73, 0.11);
+      color: #ff7b72;
+    }
+
+    .btn.blue {
+      border-color: rgba(88, 166, 255, 0.5);
+      background: rgba(88, 166, 255, 0.1);
+      color: #79c0ff;
+    }
+
+    .terminal-card {
+      border: 1px solid var(--border);
+      background: rgba(22, 27, 34, 0.95);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 16px 40px var(--shadow);
+      min-height: 430px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .term-header {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-2);
+    }
+
+    .dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+    }
+
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+
+    .term-title {
+      flex: 1;
+      text-align: center;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .toggle-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      user-select: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .toggle-wrap input {
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+
+    .log-area {
+      flex: 1;
+      min-height: 360px;
+      overflow-y: auto;
+      padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-2) transparent;
+    }
+
+    .log-area::-webkit-scrollbar { width: 7px; }
+    .log-area::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; }
+
+    .log-line {
+      display: grid;
+      grid-template-columns: 46px 96px 1fr;
+      gap: 10px;
+      border-radius: 5px;
+      padding: 1px 3px;
+    }
+
+    .log-line:hover { background: rgba(255, 255, 255, 0.035); }
+    .log-idx,
+    .log-time { color: var(--muted-2); user-select: none; }
+    .log-idx { text-align: right; }
+    .log-text { color: var(--text); word-break: break-word; white-space: pre-wrap; }
+    .log-text.sys { color: var(--blue); }
+    .log-text.err { color: #ff7b72; }
+    .log-text.sent { color: var(--orange); }
+
+    .send-row {
+      display: grid;
+      grid-template-columns: 20px 1fr 160px 48px;
+      gap: 8px;
+      align-items: center;
+      padding: 11px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--panel-2);
+    }
+
+    .send-row input[type="text"] {
+      height: 34px;
+      padding: 0 12px;
+      direction: ltr;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12.5px;
+      background: var(--bg);
+    }
+
+    .send-row input:disabled,
+    .send-row select:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .send-row svg { color: var(--muted-2); }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 9px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      background: rgba(22, 27, 34, 0.8);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .stat {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .stat svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .stat span:last-child { color: var(--text); }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%) translateY(10px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 99;
+      color: var(--text);
+      background: var(--panel-2);
+      border: 1px solid var(--border-2);
+      border-radius: 9px;
+      padding: 10px 18px;
+      box-shadow: 0 12px 34px var(--shadow);
+      font-size: 13px;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 820px) {
+      .topbar { height: auto; padding: 12px 14px; flex-direction: column; align-items: stretch; }
+      .topbar-right { justify-content: space-between; }
+      .controls { grid-template-columns: 1fr 1fr; }
+      .controls .btn { width: 100%; }
+      .send-row { grid-template-columns: 20px 1fr; }
+      .send-row select,
+      .send-row button { grid-column: span 1; }
+      .term-title { text-align: start; }
+      .log-line { grid-template-columns: 36px 86px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="4 17 10 11 4 5"></polyline>
+        <line x1="12" y1="19" x2="20" y2="19"></line>
+      </svg>
+      <span>Arduino Serial Logger</span>
+    </div>
+
+    <div class="topbar-right">
+      <button class="lang-btn" type="button" onclick="toggleLang()" id="lang-btn" title="Switch language">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span id="lang-label">فارسی</span>
+      </button>
+
+      <div class="status-pill" id="status-pill">
+        <span class="pulse" id="pulse"></span>
+        <span id="status-label">Disconnected</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="main">
+    <div class="chrome-warn" id="chrome-warn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <span id="warn-text">Your browser does not support the Web Serial API. Open this page in Chrome or Edge for a real serial connection.</span>
+    </div>
+
+    <div class="hint-card" id="permission-hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <span id="hint-text">Previously authorized ports will appear in the port list. To add a new one, choose “New port...” and click Connect.</span>
+    </div>
+
+    <section class="controls" aria-label="Serial controls">
+      <select id="port-select" title="Serial port">
+        <option value="request" data-i18n="newPort">New port...</option>
+      </select>
+
+      <select id="baud-select" title="Baud rate">
+        <option value="300">300 baud</option>
+        <option value="1200">1200 baud</option>
+        <option value="2400">2400 baud</option>
+        <option value="4800">4800 baud</option>
+        <option value="9600">9600 baud</option>
+        <option value="19200">19200 baud</option>
+        <option value="38400">38400 baud</option>
+        <option value="57600">57600 baud</option>
+        <option value="74880">74880 baud</option>
+        <option value="115200" selected>115200 baud</option>
+        <option value="230400">230400 baud</option>
+        <option value="250000">250000 baud</option>
+        <option value="500000">500000 baud</option>
+        <option value="1000000">1000000 baud</option>
+      </select>
+
+      <button class="btn blue" type="button" onclick="refreshPorts()" id="refresh-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+        </svg>
+        <span data-i18n="refresh">Refresh</span>
+      </button>
+
+      <button class="btn primary" type="button" id="connect-btn" onclick="toggleConnect()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
+        <span data-i18n="connect">Connect</span>
+      </button>
+
+      <button class="btn" type="button" onclick="exportLog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span data-i18n="save">Save Log</span>
+      </button>
+
+      <button class="btn" type="button" onclick="copyAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span data-i18n="copy">Copy All</span>
+      </button>
+
+      <button class="btn danger" type="button" onclick="clearLog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+          <path d="M10 11v6"></path><path d="M14 11v6"></path>
+        </svg>
+        <span data-i18n="clear">Clear</span>
+      </button>
+    </section>
+
+    <section class="terminal-card" aria-label="Serial monitor">
+      <div class="term-header">
+        <div class="dots" aria-hidden="true">
+          <span class="dot r"></span>
+          <span class="dot y"></span>
+          <span class="dot g"></span>
+        </div>
+        <div class="term-title" id="term-title">serial monitor — disconnected</div>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="autoscroll" checked>
+          <span data-i18n="autoscroll">Auto-scroll</span>
+        </label>
+      </div>
+
+      <div class="log-area" id="log-area"></div>
+
+      <div class="send-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+        <input type="text" id="send-input" data-i18n-ph="sendph" placeholder="Send command to Arduino (Enter)" disabled onkeydown="if(event.key === 'Enter') sendData()">
+        <select id="nl-select" disabled>
+          <option value="none" data-i18n="nonewline">No newline</option>
+          <option value="lf" selected data-i18n="newline">Newline</option>
+          <option value="cr" data-i18n="cr">Carriage return</option>
+          <option value="crlf" data-i18n="both">Both NL & CR</option>
+        </select>
+        <button class="btn blue" type="button" id="send-btn" onclick="sendData()" disabled aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="statusbar" aria-label="Serial statistics">
+      <div class="stat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        <span data-i18n="lines">Lines</span>: <span id="line-count">0</span>
+      </div>
+      <div class="stat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span data-i18n="time">Time</span>: <span id="elapsed">00:00:00</span>
+      </div>
+      <div class="stat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        <span data-i18n="bytes">Bytes</span>: <span id="byte-count">0</span>
+      </div>
+      <div class="stat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span id="rx-rate">0 B/s</span>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const T = {
+      en: {
+        connect: 'Connect',
+        disconnect: 'Disconnect',
+        refresh: 'Refresh',
+        save: 'Save Log',
+        copy: 'Copy All',
+        clear: 'Clear',
+        autoscroll: 'Auto-scroll',
+        lines: 'Lines',
+        time: 'Time',
+        bytes: 'Bytes',
+        sendph: 'Send command to Arduino (Enter)',
+        nonewline: 'No newline',
+        newline: 'Newline',
+        cr: 'Carriage return',
+        both: 'Both NL & CR',
+        newPort: 'New port...',
+        rememberedPort: (n) => `Authorized port ${n}`,
+        noRememberedPorts: 'No authorized ports yet',
+        statusDisconnected: 'Disconnected',
+        statusConnected: 'Connected',
+        termDisconnected: 'serial monitor — disconnected',
+        termConnected: (b) => `serial monitor — ${b} baud`,
+        warn: 'Your browser does not support the Web Serial API. Open this page in <strong style="margin:0 3px">Chrome</strong> or <strong style="margin:0 3px">Edge</strong> for a real serial connection.',
+        hint: 'Previously authorized ports will appear in the port list. To add a new one, choose “New port...” and click Connect.',
+        msgConnected: (b) => `Connected — ${b} baud`,
+        msgDisconnected: 'Disconnected.',
+        msgPortRemoved: 'Serial device disconnected.',
+        msgError: (m) => `Error: ${m}`,
+        msgReadError: (m) => `Connection lost: ${m}`,
+        msgSendError: (m) => `Send error: ${m}`,
+        msgSent: (text) => `← ${text}`,
+        toastNoSerial: 'Your browser does not support Web Serial. Try Chrome or Edge.',
+        toastNoLog: 'No log to copy.',
+        toastNoSave: 'No log to save.',
+        toastCopied: (n) => `✓ ${n} lines copied`,
+        toastSaved: '✓ File saved',
+        toastPortsRefreshed: '✓ Port list refreshed',
+        langLabel: 'فارسی'
+      },
+      fa: {
+        connect: 'اتصال',
+        disconnect: 'قطع اتصال',
+        refresh: 'به‌روزرسانی',
+        save: 'ذخیره لاگ',
+        copy: 'کپی همه',
+        clear: 'پاک کردن',
+        autoscroll: 'اسکرول خودکار',
+        lines: 'خط',
+        time: 'زمان',
+        bytes: 'بایت',
+        sendph: 'ارسال دستور به Arduino (Enter)',
+        nonewline: 'بدون خط جدید',
+        newline: 'خط جدید',
+        cr: 'Carriage return',
+        both: 'NL و CR باهم',
+        newPort: 'پورت جدید...',
+        rememberedPort: (n) => `پورت مجاز ${n}`,
+        noRememberedPorts: 'هنوز پورتی مجاز نشده',
+        statusDisconnected: 'قطع',
+        statusConnected: 'متصل',
+        termDisconnected: 'serial monitor — قطع',
+        termConnected: (b) => `serial monitor — ${b} baud`,
+        warn: 'مرورگر فعلی از Web Serial API پشتیبانی نمی‌کند. برای اتصال واقعی، این صفحه را در <strong style="margin:0 4px">Chrome</strong> یا <strong style="margin:0 4px">Edge</strong> باز کن.',
+        hint: 'پورت‌هایی که قبلاً اجازه داده‌ای در این لیست دیده می‌شوند. برای اضافه کردن پورت جدید، «پورت جدید...» را انتخاب کن و روی اتصال بزن.',
+        msgConnected: (b) => `متصل شد — ${b} baud`,
+        msgDisconnected: 'اتصال قطع شد.',
+        msgPortRemoved: 'دستگاه سریال جدا شد.',
+        msgError: (m) => `خطا: ${m}`,
+        msgReadError: (m) => `اتصال قطع شد: ${m}`,
+        msgSendError: (m) => `خطا در ارسال: ${m}`,
+        msgSent: (text) => `← ${text}`,
+        toastNoSerial: 'مرورگر تو از Web Serial پشتیبانی نمی‌کند. Chrome یا Edge را امتحان کن.',
+        toastNoLog: 'لاگی برای کپی وجود ندارد.',
+        toastNoSave: 'لاگی برای ذخیره وجود ندارد.',
+        toastCopied: (n) => `✓ ${n} خط کپی شد`,
+        toastSaved: '✓ فایل ذخیره شد',
+        toastPortsRefreshed: '✓ لیست پورت‌ها به‌روز شد',
+        langLabel: 'English'
+      }
+    };
+
+    let lang = 'en';
+    let connected = false;
+    let currentBaud = 115200;
+    let serialPort = null;
+    let reader = null;
+    let readableStreamClosed = null;
+    let readBuffer = '';
+    let logLines = [];
+    let lineCount = 0;
+    let byteCount = 0;
+    let recentBytes = 0;
+    let startTime = null;
+    let timerInterval = null;
+    let rateInterval = null;
+    let knownPorts = [];
+
+    const hasSerial = 'serial' in navigator;
+
+    function t(key, ...args) {
+      const value = T[lang][key];
+      return typeof value === 'function' ? value(...args) : value;
+    }
+
+    function applyLang() {
+      const isRtl = lang === 'fa';
+      document.documentElement.lang = lang;
+      document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+      document.body.classList.toggle('fa', isRtl);
+
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (T[lang][key] && typeof T[lang][key] === 'string') el.textContent = t(key);
+      });
+
+      document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-ph');
+        el.placeholder = t(key);
+      });
+
+      document.getElementById('lang-label').textContent = t('langLabel');
+      document.getElementById('warn-text').innerHTML = t('warn');
+      document.getElementById('hint-text').textContent = t('hint');
+      document.getElementById('status-label').textContent = connected ? t('statusConnected') : t('statusDisconnected');
+      document.getElementById('term-title').textContent = connected ? t('termConnected', currentBaud) : t('termDisconnected');
+      renderPortOptions();
+      updateConnectBtn();
+    }
+
+    function toggleLang() {
+      lang = lang === 'en' ? 'fa' : 'en';
+      applyLang();
+    }
+
+    function formatPortLabel(port, index) {
+      const info = typeof port.getInfo === 'function' ? port.getInfo() : {};
+      const idParts = [];
+      if (info.usbVendorId) idParts.push(`VID: ${info.usbVendorId.toString(16).padStart(4, '0')}`);
+      if (info.usbProductId) idParts.push(`PID: ${info.usbProductId.toString(16).padStart(4, '0')}`);
+      const suffix = idParts.length ? ` (${idParts.join(', ')})` : '';
+      return t('rememberedPort', index + 1) + suffix;
+    }
+
+    function renderPortOptions() {
+      const select = document.getElementById('port-select');
+      const previousValue = select.value;
+      select.innerHTML = '';
+
+      const requestOption = document.createElement('option');
+      requestOption.value = 'request';
+      requestOption.textContent = t('newPort');
+      select.appendChild(requestOption);
+
+      knownPorts.forEach((port, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = formatPortLabel(port, index);
+        select.appendChild(option);
+      });
+
+      if (knownPorts.length && previousValue !== 'request') {
+        select.value = Number.isInteger(Number(previousValue)) && knownPorts[Number(previousValue)] ? previousValue : '0';
+      } else {
+        select.value = 'request';
+      }
+    }
+
+    async function refreshPorts(showMessage = true) {
+      if (!hasSerial) return;
+      try {
+        knownPorts = await navigator.serial.getPorts();
+        renderPortOptions();
+        document.getElementById('permission-hint').classList.toggle('show', !connected);
+        if (showMessage) showToast(t('toastPortsRefreshed'));
+      } catch (error) {
+        addLine(t('msgError', error.message), 'err');
+      }
+    }
+
+    function nowFull() {
+      const d = new Date();
+      const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
+        .map((n) => String(n).padStart(2, '0'))
+        .join(':');
+      return `${time}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(2)} MB`;
+    }
+
+    function addLine(text, type = '') {
+      const area = document.getElementById('log-area');
+      const lineTime = nowFull();
+      const row = document.createElement('div');
+      row.className = 'log-line';
+      row.innerHTML =
+        `<span class="log-idx">${lineCount + 1}</span>` +
+        `<span class="log-time">${lineTime}</span>` +
+        `<span class="log-text ${type}">${escapeHtml(text)}</span>`;
+      area.appendChild(row);
+
+      const byteLength = new TextEncoder().encode(String(text)).length;
+      logLines.push(`[${lineTime}] ${text}`);
+      lineCount += 1;
+      byteCount += byteLength;
+      recentBytes += byteLength;
+
+      document.getElementById('line-count').textContent = lineCount.toLocaleString();
+      document.getElementById('byte-count').textContent = formatBytes(byteCount);
+
+      if (document.getElementById('autoscroll').checked) {
+        area.scrollTop = area.scrollHeight;
+      }
+    }
+
+    function updateTimer() {
+      if (!startTime) return;
+      const seconds = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById('elapsed').textContent = [
+        Math.floor(seconds / 3600),
+        Math.floor((seconds % 3600) / 60),
+        seconds % 60
+      ].map((n) => String(n).padStart(2, '0')).join(':');
+    }
+
+    function startTimers() {
+      stopTimers(false);
+      startTime = Date.now();
+      timerInterval = window.setInterval(updateTimer, 1000);
+      rateInterval = window.setInterval(() => {
+        document.getElementById('rx-rate').textContent = `${formatBytes(recentBytes)}/s`;
+        recentBytes = 0;
+      }, 1000);
+    }
+
+    function stopTimers(reset = true) {
+      if (timerInterval) clearInterval(timerInterval);
+      if (rateInterval) clearInterval(rateInterval);
+      timerInterval = null;
+      rateInterval = null;
+      startTime = null;
+      if (reset) document.getElementById('rx-rate').textContent = '0 B/s';
+    }
+
+    async function toggleConnect() {
+      if (connected) {
+        await doDisconnect();
+      } else {
+        await doConnect();
+      }
+    }
+
+    async function pickPort() {
+      const selected = document.getElementById('port-select').value;
+      if (selected !== 'request' && knownPorts[Number(selected)]) {
+        return knownPorts[Number(selected)];
+      }
+      return await navigator.serial.requestPort();
+    }
+
+    async function doConnect() {
+      if (!hasSerial) {
+        showToast(t('toastNoSerial'));
+        return;
+      }
+
+      currentBaud = Number.parseInt(document.getElementById('baud-select').value, 10);
+
+      try {
+        serialPort = await pickPort();
+        await serialPort.open({ baudRate: currentBaud });
+        setConnectedUI(true);
+        addLine(t('msgConnected', currentBaud), 'sys');
+        startTimers();
+        readLoop();
+        await refreshPorts(false);
+      } catch (error) {
+        if (error.name !== 'NotFoundError') addLine(t('msgError', error.message), 'err');
+        serialPort = null;
+        setConnectedUI(false);
+      }
+    }
+
+    async function doDisconnect(showMessage = true) {
+      const portToClose = serialPort;
+      setConnectedUI(false);
+      stopTimers();
+
+      if (showMessage) addLine(t('msgDisconnected'), 'sys');
+
+      try {
+        if (reader) {
+          await reader.cancel();
+          reader.releaseLock();
+          reader = null;
+        }
+      } catch (_) {
+        try { if (reader) reader.releaseLock(); } catch (_) {}
+        reader = null;
+      }
+
+      try {
+        if (readableStreamClosed) await readableStreamClosed.catch(() => {});
+      } catch (_) {}
+      readableStreamClosed = null;
+
+      try {
+        if (portToClose && portToClose.readable === null && portToClose.writable === null) {
+          // Some Chromium builds expose null streams after a device disconnect.
+        }
+        if (portToClose) await portToClose.close();
+      } catch (_) {}
+
+      serialPort = null;
+      readBuffer = '';
+      await refreshPorts(false);
+    }
+
+    function updateConnectBtn() {
+      const btn = document.getElementById('connect-btn');
+      const connectSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>';
+      const disconnectSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+      if (connected) {
+        btn.className = 'btn danger';
+        btn.innerHTML = `${disconnectSvg}<span data-i18n="disconnect">${t('disconnect')}</span>`;
+      } else {
+        btn.className = 'btn primary';
+        btn.innerHTML = `${connectSvg}<span data-i18n="connect">${t('connect')}</span>`;
+      }
+    }
+
+    function setConnectedUI(state) {
+      connected = state;
+      document.getElementById('status-pill').className = `status-pill${state ? ' connected' : ''}`;
+      document.getElementById('pulse').className = `pulse${state ? ' active' : ''}`;
+      document.getElementById('status-label').textContent = state ? t('statusConnected') : t('statusDisconnected');
+      document.getElementById('term-title').textContent = state ? t('termConnected', currentBaud) : t('termDisconnected');
+      document.getElementById('send-input').disabled = !state;
+      document.getElementById('send-btn').disabled = !state;
+      document.getElementById('nl-select').disabled = !state;
+      document.getElementById('baud-select').disabled = state;
+      document.getElementById('port-select').disabled = state;
+      document.getElementById('refresh-btn').disabled = state;
+      document.getElementById('permission-hint').classList.toggle('show', !state && hasSerial);
+      updateConnectBtn();
+    }
+
+    function consumeIncomingText(chunk) {
+      readBuffer += chunk;
+      const lines = readBuffer.split(/\r\n|\n|\r/g);
+      readBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.length) addLine(line);
+      }
+    }
+
+    async function readLoop() {
+      const decoder = new TextDecoderStream();
+      readableStreamClosed = serialPort.readable.pipeTo(decoder.writable).catch(() => {});
+      reader = decoder.readable.getReader();
+
+      try {
+        while (serialPort && connected) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) consumeIncomingText(value);
+        }
+      } catch (error) {
+        if (connected) {
+          addLine(t('msgReadError', error.message), 'err');
+          await doDisconnect(false);
+        }
+      }
+    }
+
+    async function sendData() {
+      const input = document.getElementById('send-input');
+      const newlineMode = document.getElementById('nl-select').value;
+      const newlineMap = { none: '', lf: '\n', cr: '\r', crlf: '\r\n' };
+      const newline = newlineMap[newlineMode] ?? '';
+      const text = input.value;
+
+      if (!text || !serialPort || !serialPort.writable) return;
+
+      let localWriter = null;
+      try {
+        localWriter = serialPort.writable.getWriter();
+        const data = new TextEncoder().encode(text + newline);
+        await localWriter.write(data);
+        addLine(t('msgSent', text), 'sent');
+        input.value = '';
+      } catch (error) {
+        addLine(t('msgSendError', error.message), 'err');
+      } finally {
+        if (localWriter) {
+          try { localWriter.releaseLock(); } catch (_) {}
+        }
+      }
+    }
+
+    function clearLog() {
+      document.getElementById('log-area').innerHTML = '';
+      logLines = [];
+      lineCount = 0;
+      byteCount = 0;
+      recentBytes = 0;
+      readBuffer = '';
+      document.getElementById('line-count').textContent = '0';
+      document.getElementById('byte-count').textContent = '0';
+      document.getElementById('elapsed').textContent = '00:00:00';
+      document.getElementById('rx-rate').textContent = '0 B/s';
+      if (connected) startTime = Date.now();
+    }
+
+    function copyAll() {
+      if (!logLines.length) {
+        showToast(t('toastNoLog'));
+        return;
+      }
+      navigator.clipboard.writeText(logLines.join('\n'))
+        .then(() => showToast(t('toastCopied', lineCount.toLocaleString())))
+        .catch((error) => addLine(t('msgError', error.message), 'err'));
+    }
+
+    function exportLog() {
+      if (!logLines.length) {
+        showToast(t('toastNoSave'));
+        return;
+      }
+      const blob = new Blob([logLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `serial_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast(t('toastSaved'));
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    if (!hasSerial) {
+      document.getElementById('chrome-warn').classList.add('show');
+      document.getElementById('connect-btn').disabled = true;
+      document.getElementById('refresh-btn').disabled = true;
+    } else {
+      navigator.serial.addEventListener('connect', () => refreshPorts(false));
+      navigator.serial.addEventListener('disconnect', async (event) => {
+        await refreshPorts(false);
+        if (serialPort && event.target === serialPort) {
+          addLine(t('msgPortRemoved'), 'err');
+          await doDisconnect(false);
+        }
+      });
+      refreshPorts(false);
+    }
+
+    applyLang();
+  </script>
+</body>
+</html>
